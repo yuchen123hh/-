@@ -12,6 +12,8 @@ G1 对接：本地实时推理 + audio_event JSON + HTTP webhook 报警
 
 当前本机阶段只准备代码、配置、测试、训练脚本和 G1 部署入口。**需要付云 GPU 算力钱时会明确通知，不会自动开始付费训练。**
 
+正式微调只允许真实世界音频进入训练清单。`train_manifest.csv` 和 `val_manifest.csv` 必须包含 `source_type`，只接受 `audioset`（真实 AudioSet 片段）和 `g1_field`（Unitree G1 麦克风真机采集）。`synthetic`、`generated`、`mock` 或缺失来源会被云端预检和训练脚本直接拒绝。fake smoke 和合成音频只用于链路测试，不会作为正式训练数据。
+
 ## 新系统文件
 
 - `config/g1_abnormal_events.yaml`：G1 阈值、连续命中次数、冷却时间、webhook 配置。
@@ -105,6 +107,8 @@ python training/efficientat/train_g1_abnormal.py \
 ```
 
 dry-run 必须确认三件事：manifest 非空、6 类标签合法、EfficientAT 上游目录存在。通过后再开始云 GPU 计费训练。
+
+preflight 和训练脚本还会检查 `source_type`：只有 `audioset` 和 `g1_field` 能通过，确保第一轮训练用真实 AudioSet，第二轮再加入 G1 真机环境真实录音。
 
 第二轮在 G1 真机收集误报、漏报和机器人噪声样本后继续训练 v1。
 

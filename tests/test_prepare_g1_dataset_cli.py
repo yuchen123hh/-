@@ -55,6 +55,7 @@ class PrepareG1DatasetCliTests(unittest.TestCase):
             all_labels = {row["label"] for row in train_rows + val_rows}
             self.assertEqual(all_labels, {"cough", "smoke_alarm", "background"})
             self.assertTrue(all(row["audio_path"].endswith(".wav") for row in train_rows + val_rows))
+            self.assertEqual({row["source_type"] for row in train_rows + val_rows}, {"audioset"})
 
     def test_write_g1_collection_plan_contains_required_events(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -93,10 +94,17 @@ class PrepareG1DatasetCliTests(unittest.TestCase):
 
     def _write_metadata(self, path: Path, rows: list[tuple[str, str, str]]) -> None:
         with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=["clip_id", "audio_path", "audioset_labels"])
+            writer = csv.DictWriter(handle, fieldnames=["clip_id", "audio_path", "audioset_labels", "source_type"])
             writer.writeheader()
             for clip_id, audio_path, labels in rows:
-                writer.writerow({"clip_id": clip_id, "audio_path": audio_path, "audioset_labels": labels})
+                writer.writerow(
+                    {
+                        "clip_id": clip_id,
+                        "audio_path": audio_path,
+                        "audioset_labels": labels,
+                        "source_type": "audioset",
+                    }
+                )
 
     def _read_rows(self, path: Path) -> list[dict[str, str]]:
         with path.open("r", encoding="utf-8", newline="") as handle:

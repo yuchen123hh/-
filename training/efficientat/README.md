@@ -34,8 +34,15 @@ config/g1_abnormal_events.yaml
 Manifest columns:
 
 ```text
-audio_path,label
+audio_path,label,source_type
 ```
+
+`source_type` is a hard training gate. Only real-world sources are accepted:
+
+- `audioset`: real AudioSet clips selected from the AudioSet metadata/audio files.
+- `g1_field`: real recordings captured from the Unitree G1 microphone in the target environment.
+
+Synthetic, generated, mock, and smoke-test samples are rejected by `cloud_preflight.py` and `train_g1_abnormal.py`.
 
 ## Round 1 Command
 

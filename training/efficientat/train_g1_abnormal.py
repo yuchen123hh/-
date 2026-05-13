@@ -11,6 +11,9 @@ from typing import Any
 from efficientat_adapter import CLASSES, build_dymn10_model, build_mel
 
 
+REAL_WORLD_SOURCE_TYPES = {"audioset", "g1_field"}
+
+
 def read_manifest(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
@@ -24,12 +27,31 @@ def validate_manifest(path: Path) -> Counter[str]:
     for index, row in enumerate(rows, start=2):
         audio_path = row.get("audio_path", "").strip()
         label = row.get("label", "").strip()
+        source_type = _normalize_source_type(row.get("source_type", ""))
         if not audio_path:
             raise RuntimeError(f"{path}:{index} missing audio_path")
         if label not in CLASSES:
             raise RuntimeError(f"{path}:{index} unsupported label '{label}'")
+        if not source_type:
+            raise ValueError(f"{path}:{index} missing source_type; use one of {sorted(REAL_WORLD_SOURCE_TYPES)}")
+        if source_type not in REAL_WORLD_SOURCE_TYPES:
+            raise ValueError(
+                f"{path}:{index} non-real-world source_type '{source_type}'; "
+                f"only {sorted(REAL_WORLD_SOURCE_TYPES)} are allowed for training"
+            )
         counts[label] += 1
     return counts
+
+
+def count_manifest_sources(path: Path) -> Counter[str]:
+    rows = read_manifest(path)
+    return Counter(_normalize_source_type(row.get("source_type", "")) or "<missing>" for row in rows)
+
+
+def _normalize_source_type(value: object | None) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().lower()
 
 
 class ManifestAudioDataset:

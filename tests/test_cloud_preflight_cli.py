@@ -43,12 +43,45 @@ class CloudPreflightCliTests(unittest.TestCase):
             self.assertIn("cuda_available", result.stdout)
             self.assertIn("train_counts", result.stdout)
             self.assertIn("ready_for_paid_training", result.stdout)
+            self.assertIn("real_world_source_counts", result.stdout)
 
-    def _write_manifest(self, path: Path) -> None:
+    def test_preflight_rejects_synthetic_manifest_sources(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            efficientat_root = base / "EfficientAT"
+            (efficientat_root / "models" / "dymn").mkdir(parents=True)
+            (efficientat_root / "models" / "dymn" / "model.py").write_text("", encoding="utf-8")
+            train_manifest = base / "train_manifest.csv"
+            val_manifest = base / "val_manifest.csv"
+            self._write_manifest(train_manifest, source_type="synthetic")
+            self._write_manifest(val_manifest, source_type="audioset")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "training" / "efficientat" / "cloud_preflight.py"),
+                    "--train-manifest",
+                    str(train_manifest),
+                    "--val-manifest",
+                    str(val_manifest),
+                    "--efficientat-root",
+                    str(efficientat_root),
+                    "--allow-cpu",
+                ],
+                cwd=str(ROOT),
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("non-real-world source_type", result.stdout)
+
+    def _write_manifest(self, path: Path, source_type: str = "audioset") -> None:
         with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=["audio_path", "label"])
+            writer = csv.DictWriter(handle, fieldnames=["audio_path", "label", "source_type"])
             writer.writeheader()
-            writer.writerow({"audio_path": "sample.wav", "label": "cough"})
+            writer.writerow({"audio_path": "sample.wav", "label": "cough", "source_type": source_type})
 
 
 if __name__ == "__main__":

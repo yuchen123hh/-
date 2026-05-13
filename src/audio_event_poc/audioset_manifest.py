@@ -58,6 +58,7 @@ class AudioSetClip:
     clip_id: str
     audio_path: str
     labels: list[str]
+    source_type: str = "audioset"
 
 
 def map_audioset_labels(labels: Iterable[str]) -> str | None:
@@ -90,6 +91,7 @@ def build_balanced_manifest(
                 "audio_path": clip.audio_path,
                 "label": label,
                 "audioset_labels": "|".join(clip.labels),
+                "source_type": clip.source_type,
             }
         )
         counts[label] = counts.get(label, 0) + 1
@@ -99,7 +101,7 @@ def build_balanced_manifest(
 def write_manifest(rows: Iterable[Mapping[str, str]], output_path: str | Path) -> Path:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["clip_id", "audio_path", "label", "audioset_labels"]
+    fieldnames = ["clip_id", "audio_path", "label", "audioset_labels", "source_type"]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -119,6 +121,7 @@ def read_manifest_clips(path: str | Path) -> list[AudioSetClip]:
                     clip_id=row.get("clip_id") or row.get("YTID") or "",
                     audio_path=row.get("audio_path") or row.get("path") or "",
                     labels=labels,
+                    source_type=row.get("source_type") or "audioset",
                 )
             )
     return rows

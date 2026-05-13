@@ -36,14 +36,33 @@ class AudioSetManifestTests(unittest.TestCase):
         self.assertEqual(
             rows,
             [
-                {"clip_id": "a", "audio_path": "a.wav", "label": "cough", "audioset_labels": "Cough"},
-                {"clip_id": "c", "audio_path": "c.wav", "label": "knock", "audioset_labels": "Knock"},
-                {"clip_id": "d", "audio_path": "d.wav", "label": "glass_break", "audioset_labels": "Glass"},
+                {
+                    "clip_id": "a",
+                    "audio_path": "a.wav",
+                    "label": "cough",
+                    "audioset_labels": "Cough",
+                    "source_type": "audioset",
+                },
+                {
+                    "clip_id": "c",
+                    "audio_path": "c.wav",
+                    "label": "knock",
+                    "audioset_labels": "Knock",
+                    "source_type": "audioset",
+                },
+                {
+                    "clip_id": "d",
+                    "audio_path": "d.wav",
+                    "label": "glass_break",
+                    "audioset_labels": "Glass",
+                    "source_type": "audioset",
+                },
                 {
                     "clip_id": "e",
                     "audio_path": "e.wav",
                     "label": "background",
                     "audioset_labels": "Domestic sounds, home sounds",
+                    "source_type": "audioset",
                 },
             ],
         )

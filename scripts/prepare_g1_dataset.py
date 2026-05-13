@@ -49,6 +49,7 @@ def read_metadata(path: Path, audio_root: Path) -> list[AudioSetClip]:
                     clip_id=row.get("clip_id") or row.get("YTID") or row.get("id") or Path(audio_path).stem,
                     audio_path=audio_path,
                     labels=labels,
+                    source_type=row.get("source_type") or "audioset",
                 )
             )
     return clips
@@ -91,9 +92,9 @@ def build_manifest(args: argparse.Namespace) -> int:
     if not rows:
         raise RuntimeError("no rows matched the G1 abnormal audio label mapping")
     train_rows, val_rows = split_rows(rows, val_ratio=args.val_ratio, seed=args.seed)
-    write_rows(args.output_dir / "train_manifest.csv", _training_rows(train_rows), fields=["audio_path", "label"])
-    write_rows(args.output_dir / "val_manifest.csv", _training_rows(val_rows), fields=["audio_path", "label"])
-    write_rows(args.output_dir / "selected_manifest.csv", rows, fields=["clip_id", "audio_path", "label", "audioset_labels"])
+    write_rows(args.output_dir / "train_manifest.csv", _training_rows(train_rows), fields=["audio_path", "label", "source_type"])
+    write_rows(args.output_dir / "val_manifest.csv", _training_rows(val_rows), fields=["audio_path", "label", "source_type"])
+    write_rows(args.output_dir / "selected_manifest.csv", rows, fields=["clip_id", "audio_path", "label", "audioset_labels", "source_type"])
     print(f"train={len(train_rows)} val={len(val_rows)} selected={len(rows)}")
     return 0
 
@@ -134,7 +135,10 @@ def write_g1_plan(args: argparse.Namespace) -> int:
 
 
 def _training_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    return [{"audio_path": row["audio_path"], "label": row["label"]} for row in rows]
+    return [
+        {"audio_path": row["audio_path"], "label": row["label"], "source_type": row.get("source_type", "audioset")}
+        for row in rows
+    ]
 
 
 def _parse_limits(values: list[str]) -> dict[str, int]:

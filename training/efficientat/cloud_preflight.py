@@ -6,7 +6,7 @@ import platform
 import sys
 from pathlib import Path
 
-from train_g1_abnormal import validate_manifest
+from train_g1_abnormal import count_manifest_sources, validate_manifest
 
 
 def check_python_packages() -> dict[str, object]:
@@ -50,12 +50,29 @@ def check_cuda() -> dict[str, object]:
 
 
 def run_preflight(args: argparse.Namespace) -> int:
-    train_counts = validate_manifest(args.train_manifest)
-    val_counts = validate_manifest(args.val_manifest)
+    hard_failures: list[str] = []
+    always_blocking_failures: list[str] = []
+    train_counts = {}
+    val_counts = {}
+    try:
+        train_counts = validate_manifest(args.train_manifest)
+    except (RuntimeError, ValueError) as exc:
+        message = str(exc)
+        hard_failures.append(message)
+        always_blocking_failures.append(message)
+    try:
+        val_counts = validate_manifest(args.val_manifest)
+    except (RuntimeError, ValueError) as exc:
+        message = str(exc)
+        hard_failures.append(message)
+        always_blocking_failures.append(message)
+    source_counts = {
+        "train": dict(count_manifest_sources(args.train_manifest)),
+        "val": dict(count_manifest_sources(args.val_manifest)),
+    }
     efficientat_ok = (args.efficientat_root / "models" / "dymn" / "model.py").exists()
     packages = check_python_packages()
     cuda = check_cuda()
-    hard_failures: list[str] = []
     if not efficientat_ok:
         hard_failures.append(f"invalid EfficientAT root: {args.efficientat_root}")
     if not args.allow_cpu and not cuda.get("cuda_available"):
@@ -76,11 +93,14 @@ def run_preflight(args: argparse.Namespace) -> int:
         "val_manifest": str(args.val_manifest),
         "train_counts": dict(train_counts),
         "val_counts": dict(val_counts),
+        "real_world_source_counts": source_counts,
         "packages": packages,
         "cuda": cuda,
         "budget_guard": "Stop here and ask before starting a paid RTX 4090 instance or paid training run.",
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if always_blocking_failures:
+        return 1
     return 0 if not hard_failures or args.allow_cpu else 1
 
 
