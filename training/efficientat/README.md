@@ -39,11 +39,22 @@ audio_path,label
 
 ## Round 1 Command
 
+Run preflight before any paid training:
+
+```bash
+python training/efficientat/cloud_preflight.py \
+  --train-manifest data/g1_audio/train_manifest.csv \
+  --val-manifest data/g1_audio/val_manifest.csv \
+  --efficientat-root /workspace/EfficientAT
+```
+
+Only continue if `ready_for_paid_training` is `true` and the GPU name is an RTX 4090-class device. Stop and ask before starting the paid instance or training run.
+
 ```bash
 python training/efficientat/train_g1_abnormal.py \
   --train-manifest data/g1_audio/train_manifest.csv \
   --val-manifest data/g1_audio/val_manifest.csv \
-  --pretrained checkpoints/dymn10_as_pretrained.pt \
+  --efficientat-root /workspace/EfficientAT \
   --output-dir runs/g1_audio_v0 \
   --epochs 20 \
   --batch-size 48 \

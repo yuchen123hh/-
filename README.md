@@ -35,7 +35,43 @@ fake smoke 会输出一个标准 `audio_event`，并显示 webhook 未配置时�
 
 ## 云 GPU 训练计划
 
+先准备 AudioSet/本地样本元数据：
+
+```powershell
+python scripts/prepare_g1_dataset.py build-manifest `
+  --metadata-csv data\audioset_g1_metadata.csv `
+  --audio-root data\audioset_audio `
+  --output-dir data\g1_audio `
+  --val-ratio 0.15 `
+  --limit distress_call=1200 `
+  --limit glass_break=1200 `
+  --limit knock=1200 `
+  --limit cough=1200 `
+  --limit smoke_alarm=1200 `
+  --limit background=4000
+```
+
+生成 G1 真机采样计划：
+
+```powershell
+python scripts/prepare_g1_dataset.py g1-plan `
+  --output data\g1_field_collection_plan.csv `
+  --per-event 50 `
+  --background 150
+```
+
 第一轮只花 50 元训练 v0，不追最终精度：
+
+先在云端做 preflight，不启动训练：
+
+```bash
+python training/efficientat/cloud_preflight.py \
+  --train-manifest data/g1_audio/train_manifest.csv \
+  --val-manifest data/g1_audio/val_manifest.csv \
+  --efficientat-root /workspace/EfficientAT
+```
+
+`ready_for_paid_training` 为 `true`，并确认是 RTX 4090 后，再开始付费训练。这里我会停下来问你。
 
 ```bash
 python training/efficientat/train_g1_abnormal.py \
