@@ -56,6 +56,7 @@ class PrepareG1DatasetCliTests(unittest.TestCase):
             self.assertEqual(all_labels, {"cough", "smoke_alarm", "background"})
             self.assertTrue(all(row["audio_path"].endswith(".wav") for row in train_rows + val_rows))
             self.assertEqual({row["source_type"] for row in train_rows + val_rows}, {"audioset"})
+            self.assertTrue(all(row["source_id"] for row in train_rows + val_rows))
 
     def test_write_g1_collection_plan_contains_required_events(self):
         with tempfile.TemporaryDirectory() as tmpdir:

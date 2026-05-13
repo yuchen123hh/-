@@ -44,7 +44,24 @@ audio_path,label,source_type
 
 Synthetic, generated, mock, and smoke-test samples are rejected by `cloud_preflight.py` and `train_g1_abnormal.py`.
 
+For paid training, also include `source_id` or `clip_id` in each row so every training item can be traced back to its AudioSet clip or G1 field recording.
+
 ## Round 1 Command
+
+Audit the actual audio files before preflight:
+
+```bash
+python scripts/audit_g1_dataset.py \
+  --train-manifest data/g1_audio/train_manifest.csv \
+  --val-manifest data/g1_audio/val_manifest.csv \
+  --output reports/g1_audio_dataset_audit.json \
+  --min-duration-s 0.5 \
+  --max-duration-s 15 \
+  --min-per-label 100 \
+  --require-all-labels
+```
+
+Only continue when `ready_for_training` is `true`.
 
 Run preflight before any paid training:
 
@@ -52,7 +69,9 @@ Run preflight before any paid training:
 python training/efficientat/cloud_preflight.py \
   --train-manifest data/g1_audio/train_manifest.csv \
   --val-manifest data/g1_audio/val_manifest.csv \
-  --efficientat-root /workspace/EfficientAT
+  --efficientat-root /workspace/EfficientAT \
+  --min-per-label 100 \
+  --require-all-labels
 ```
 
 Only continue if `ready_for_paid_training` is `true` and the GPU name is an RTX 4090-class device. Stop and ask before starting the paid instance or training run.

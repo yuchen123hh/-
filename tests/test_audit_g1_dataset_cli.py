@@ -12,31 +12,30 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class CloudPreflightCliTests(unittest.TestCase):
-    def test_preflight_check_reports_cpu_environment_without_failing_when_allowed(self):
+class AuditG1DatasetCliTests(unittest.TestCase):
+    def test_cli_writes_report_and_returns_success_for_real_audio(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
-            efficientat_root = base / "EfficientAT"
-            (efficientat_root / "models" / "dymn").mkdir(parents=True)
-            (efficientat_root / "models" / "dymn" / "model.py").write_text("", encoding="utf-8")
-            self._write_wav(base / "train_sample.wav")
-            self._write_wav(base / "val_sample.wav")
+            self._write_wav(base / "cough_train.wav")
+            self._write_wav(base / "cough_val.wav")
             train_manifest = base / "train_manifest.csv"
             val_manifest = base / "val_manifest.csv"
-            self._write_manifest(train_manifest, audio_path="train_sample.wav")
-            self._write_manifest(val_manifest, audio_path="val_sample.wav")
+            self._write_manifest(train_manifest, "cough_train.wav")
+            self._write_manifest(val_manifest, "cough_val.wav")
+            report_path = base / "audit.json"
 
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "training" / "efficientat" / "cloud_preflight.py"),
+                    str(ROOT / "scripts" / "audit_g1_dataset.py"),
                     "--train-manifest",
                     str(train_manifest),
                     "--val-manifest",
                     str(val_manifest),
-                    "--efficientat-root",
-                    str(efficientat_root),
-                    "--allow-cpu",
+                    "--output",
+                    str(report_path),
+                    "--min-per-label",
+                    "2",
                 ],
                 cwd=str(ROOT),
                 capture_output=True,
@@ -45,36 +44,26 @@ class CloudPreflightCliTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("cuda_available", result.stdout)
-            self.assertIn("train_counts", result.stdout)
-            self.assertIn("ready_for_paid_training", result.stdout)
-            self.assertIn("real_world_source_counts", result.stdout)
-            self.assertIn("dataset_audit", result.stdout)
+            self.assertTrue(report_path.exists())
+            self.assertIn('"ready_for_training": true', result.stdout)
 
-    def test_preflight_rejects_synthetic_manifest_sources(self):
+    def test_cli_returns_failure_for_missing_audio(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
-            efficientat_root = base / "EfficientAT"
-            (efficientat_root / "models" / "dymn").mkdir(parents=True)
-            (efficientat_root / "models" / "dymn" / "model.py").write_text("", encoding="utf-8")
-            self._write_wav(base / "train_sample.wav")
-            self._write_wav(base / "val_sample.wav")
             train_manifest = base / "train_manifest.csv"
             val_manifest = base / "val_manifest.csv"
-            self._write_manifest(train_manifest, audio_path="train_sample.wav", source_type="synthetic")
-            self._write_manifest(val_manifest, audio_path="val_sample.wav", source_type="audioset")
+            self._write_manifest(train_manifest, "missing.wav")
+            self._write_manifest(val_manifest, "missing.wav")
 
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "training" / "efficientat" / "cloud_preflight.py"),
+                    str(ROOT / "scripts" / "audit_g1_dataset.py"),
                     "--train-manifest",
                     str(train_manifest),
                     "--val-manifest",
                     str(val_manifest),
-                    "--efficientat-root",
-                    str(efficientat_root),
-                    "--allow-cpu",
+                    "--allow-missing-provenance",
                 ],
                 cwd=str(ROOT),
                 capture_output=True,
@@ -83,9 +72,9 @@ class CloudPreflightCliTests(unittest.TestCase):
             )
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("non-real-world source_type", result.stdout)
+            self.assertIn("audio file not found", result.stdout)
 
-    def _write_manifest(self, path: Path, *, audio_path: str, source_type: str = "audioset") -> None:
+    def _write_manifest(self, path: Path, audio_path: str) -> None:
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=["audio_path", "label", "source_type", "source_id"])
             writer.writeheader()
@@ -93,7 +82,7 @@ class CloudPreflightCliTests(unittest.TestCase):
                 {
                     "audio_path": audio_path,
                     "label": "cough",
-                    "source_type": source_type,
+                    "source_type": "audioset",
                     "source_id": f"id-{path.stem}",
                 }
             )

@@ -62,6 +62,21 @@ python scripts/prepare_g1_dataset.py g1-plan `
   --background 150
 ```
 
+付费训练前先审计真实音频文件：
+
+```powershell
+python scripts/audit_g1_dataset.py `
+  --train-manifest data\g1_audio\train_manifest.csv `
+  --val-manifest data\g1_audio\val_manifest.csv `
+  --output reports\g1_audio_dataset_audit.json `
+  --min-duration-s 0.5 `
+  --max-duration-s 15 `
+  --min-per-label 100 `
+  --require-all-labels
+```
+
+审计会检查音频文件是否存在且可读、时长是否合理、train/val 是否重复、标签分布、`source_type` 是否只来自 `audioset` 或 `g1_field`，以及 `source_id`/`clip_id` 是否可追溯。
+
 第一轮只花 50 元训练 v0，不追最终精度：
 
 先在云端做 preflight，不启动训练：
@@ -70,7 +85,9 @@ python scripts/prepare_g1_dataset.py g1-plan `
 python training/efficientat/cloud_preflight.py \
   --train-manifest data/g1_audio/train_manifest.csv \
   --val-manifest data/g1_audio/val_manifest.csv \
-  --efficientat-root /workspace/EfficientAT
+  --efficientat-root /workspace/EfficientAT \
+  --min-per-label 100 \
+  --require-all-labels
 ```
 
 `ready_for_paid_training` 为 `true`，并确认是 RTX 4090 后，再开始付费训练。这里我会停下来问你。

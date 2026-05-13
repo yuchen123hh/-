@@ -6,6 +6,12 @@ import platform
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from audio_event_poc.dataset_audit import audit_manifests
 from train_g1_abnormal import count_manifest_sources, validate_manifest
 
 
@@ -70,6 +76,22 @@ def run_preflight(args: argparse.Namespace) -> int:
         "train": dict(count_manifest_sources(args.train_manifest)),
         "val": dict(count_manifest_sources(args.val_manifest)),
     }
+    dataset_audit = audit_manifests(
+        [("train", args.train_manifest), ("val", args.val_manifest)],
+        min_duration_s=args.min_duration_s,
+        max_duration_s=args.max_duration_s,
+        min_per_label=args.min_per_label,
+        require_all_labels=args.require_all_labels,
+        require_provenance=not args.allow_missing_provenance,
+    )
+    if not dataset_audit["ready_for_training"]:
+        for failure in dataset_audit["failures"]:
+            if isinstance(failure, dict):
+                message = str(failure.get("message") or failure)
+            else:
+                message = str(failure)
+            hard_failures.append(message)
+            always_blocking_failures.append(message)
     efficientat_ok = (args.efficientat_root / "models" / "dymn" / "model.py").exists()
     packages = check_python_packages()
     cuda = check_cuda()
@@ -94,6 +116,7 @@ def run_preflight(args: argparse.Namespace) -> int:
         "train_counts": dict(train_counts),
         "val_counts": dict(val_counts),
         "real_world_source_counts": source_counts,
+        "dataset_audit": dataset_audit,
         "packages": packages,
         "cuda": cuda,
         "budget_guard": "Stop here and ask before starting a paid RTX 4090 instance or paid training run.",
@@ -109,6 +132,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-manifest", type=Path, required=True)
     parser.add_argument("--val-manifest", type=Path, required=True)
     parser.add_argument("--efficientat-root", type=Path, required=True)
+    parser.add_argument("--min-duration-s", type=float, default=0.5)
+    parser.add_argument("--max-duration-s", type=float, default=15.0)
+    parser.add_argument("--min-per-label", type=int, default=1)
+    parser.add_argument("--require-all-labels", action="store_true")
+    parser.add_argument(
+        "--allow-missing-provenance",
+        action="store_true",
+        help="Allow missing source_id/clip_id. Use only for legacy local experiments, not paid training.",
+    )
     parser.add_argument("--allow-cpu", action="store_true", help="Allow local CPU preflight to exit 0 for tests.")
     return parser.parse_args()
 
