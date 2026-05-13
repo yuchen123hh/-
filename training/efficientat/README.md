@@ -25,11 +25,17 @@ Clone or install EfficientAT in the cloud workspace according to its upstream RE
 ## Expected Inputs
 
 ```text
+data/audioset_metadata/class_labels_indices.csv
+data/audioset_metadata/balanced_train_segments.csv
+data/audioset_g1_candidates.csv
+data/audioset_g1_downloaded_manifest.csv
 data/g1_audio/train_manifest.csv
 data/g1_audio/val_manifest.csv
 checkpoints/dymn10_as_pretrained.pt
 config/g1_abnormal_events.yaml
 ```
+
+Use `scripts/prepare_audioset_real_data.py` to convert official AudioSet segment CSVs into a candidate list, then use `download-audio` to fetch and crop the real YouTube audio segments with `yt-dlp` and `ffmpeg`. The downloader writes failures separately and never fabricates missing clips.
 
 Manifest columns:
 

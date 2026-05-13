@@ -37,12 +37,61 @@ fake smoke 会输出一个标准 `audio_event`，并显示 webhook 未配置时�
 
 ## 云 GPU 训练计划
 
-先准备 AudioSet/本地样本元数据：
+先下载官方 AudioSet 元数据，只是 CSV，不是训练音频：
+
+```powershell
+python scripts/prepare_audioset_real_data.py download-metadata `
+  --output-dir data\audioset_metadata `
+  --skip-unbalanced
+```
+
+从官方 segment CSV 生成 6 类候选清单：
+
+```powershell
+python scripts/prepare_audioset_real_data.py build-candidates `
+  --class-labels-csv data\audioset_metadata\class_labels_indices.csv `
+  --segments-csv data\audioset_metadata\balanced_train_segments.csv `
+  --segments-csv data\audioset_metadata\eval_segments.csv `
+  --output data\audioset_g1_candidates.csv `
+  --limit distress_call=1200 `
+  --limit glass_break=1200 `
+  --limit knock=1200 `
+  --limit cough=1200 `
+  --limit smoke_alarm=1200 `
+  --limit background=4000
+```
+
+先 dry-run 检查输出路径和来源字段，不下载：
+
+```powershell
+python scripts/prepare_audioset_real_data.py download-audio `
+  --candidates-csv data\audioset_g1_candidates.csv `
+  --output-dir data\audioset_audio `
+  --manifest data\audioset_g1_downloaded_manifest.csv `
+  --failures data\audioset_g1_download_failures.jsonl `
+  --max-clips 20 `
+  --dry-run
+```
+
+确认无误后再小批量下载真实 YouTube 音频片段并裁剪成 WAV：
+
+```powershell
+python scripts/prepare_audioset_real_data.py download-audio `
+  --candidates-csv data\audioset_g1_candidates.csv `
+  --output-dir data\audioset_audio `
+  --manifest data\audioset_g1_downloaded_manifest.csv `
+  --failures data\audioset_g1_download_failures.jsonl `
+  --max-clips 300
+```
+
+这一步使用 `yt-dlp` 和 `ffmpeg` 获取真实世界音频；如果 YouTube 链接失效，会记录到 failures，不会伪造样本。
+
+再准备训练用 train/val manifest：
 
 ```powershell
 python scripts/prepare_g1_dataset.py build-manifest `
-  --metadata-csv data\audioset_g1_metadata.csv `
-  --audio-root data\audioset_audio `
+  --metadata-csv data\audioset_g1_downloaded_manifest.csv `
+  --audio-root . `
   --output-dir data\g1_audio `
   --val-ratio 0.15 `
   --limit distress_call=1200 `
