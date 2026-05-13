@@ -186,12 +186,16 @@ def download_candidates(
     failures_path.parent.mkdir(parents=True, exist_ok=True)
     successes: list[dict[str, str]] = []
     failures: list[dict[str, str]] = []
+    _write_download_manifest([], manifest_path)
+    failures_path.write_text("", encoding="utf-8")
 
     for candidate in candidates:
         output_path = output_dir / candidate.label / f"{candidate.clip_id}.wav"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if dry_run:
-            successes.append(_manifest_row(candidate, output_path, manifest_path=manifest_path, status="dry_run"))
+            row = _manifest_row(candidate, output_path, manifest_path=manifest_path, status="dry_run")
+            successes.append(row)
+            _append_download_manifest_row(row, manifest_path)
             continue
         assert ffmpeg is not None
         try:
@@ -205,14 +209,14 @@ def download_candidates(
                 ffmpeg_path=ffmpeg,
                 runner=command_runner,
             )
-            successes.append(_manifest_row(candidate, output_path, manifest_path=manifest_path, status="downloaded"))
+            row = _manifest_row(candidate, output_path, manifest_path=manifest_path, status="downloaded")
+            successes.append(row)
+            _append_download_manifest_row(row, manifest_path)
         except RuntimeError as exc:
-            failures.append({**candidate_to_row(candidate), "error": str(exc)})
-
-    _write_download_manifest(successes, manifest_path)
-    with failures_path.open("w", encoding="utf-8") as handle:
-        for failure in failures:
-            handle.write(json.dumps(failure, ensure_ascii=False) + "\n")
+            failure = {**candidate_to_row(candidate), "error": str(exc)}
+            failures.append(failure)
+            with failures_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(failure, ensure_ascii=False) + "\n")
     return {
         "requested": len(successes) + len(failures),
         "downloaded": len(successes),
@@ -356,6 +360,26 @@ def _write_download_manifest(rows: list[dict[str, str]], manifest_path: Path) ->
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field, "") for field in fieldnames})
+
+
+def _append_download_manifest_row(row: dict[str, str], manifest_path: Path) -> None:
+    fieldnames = [
+        "clip_id",
+        "audio_path",
+        "label",
+        "audioset_labels",
+        "source_type",
+        "source_id",
+        "ytid",
+        "start_seconds",
+        "end_seconds",
+        "positive_mids",
+        "youtube_url",
+        "download_status",
+    ]
+    with manifest_path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writerow({field: row.get(field, "") for field in fieldnames})
 
 
 def _run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:

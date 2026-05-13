@@ -110,6 +110,58 @@ class AudioSetRealDataTests(unittest.TestCase):
         self.assertEqual(rows[0]["source_id"], "audioset:abc:30.000:40.000")
         self.assertEqual(rows[0]["audio_path"], "audio/cough/abc_000030000_000040000.wav")
 
+    def test_download_candidates_persists_partial_progress(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            candidates = [
+                AudioSetCandidate(
+                    clip_id="ok_000001000_000011000",
+                    ytid="ok",
+                    start_seconds=1.0,
+                    end_seconds=11.0,
+                    label="cough",
+                    audioset_labels=["Cough"],
+                    positive_mids=["/m/cough"],
+                ),
+                AudioSetCandidate(
+                    clip_id="bad_000001000_000011000",
+                    ytid="bad",
+                    start_seconds=1.0,
+                    end_seconds=11.0,
+                    label="knock",
+                    audioset_labels=["Knock"],
+                    positive_mids=["/m/07r4wb8"],
+                ),
+            ]
+
+            def runner(command):
+                text = " ".join(str(item) for item in command)
+                if "yt_dlp" in text and "https://www.youtube.com/watch?v=bad" in text:
+                    return _completed(stderr="gone", returncode=1)
+                if "yt_dlp" in text:
+                    return _completed(stdout="https://media.example/audio.webm\n")
+                if command[0] == "ffmpeg":
+                    Path(command[-1]).write_bytes(b"RIFF")
+                    return _completed()
+                return _completed()
+
+            report = download_candidates(
+                candidates,
+                output_dir=base / "audio",
+                manifest_path=base / "downloaded_manifest.csv",
+                failures_path=base / "failures.jsonl",
+                runner=runner,
+                ffmpeg_path="ffmpeg",
+            )
+
+            rows = self._read_rows(base / "downloaded_manifest.csv")
+            failures = (base / "failures.jsonl").read_text(encoding="utf-8")
+
+        self.assertEqual(report["downloaded"], 1)
+        self.assertEqual(report["failed"], 1)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("yt-dlp failed", failures)
+
     def test_resolve_youtube_audio_url_uses_yt_dlp(self):
         commands = []
 

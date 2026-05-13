@@ -64,6 +64,8 @@ def build_candidate_manifest(args: argparse.Namespace) -> int:
 
 def download_audio(args: argparse.Namespace) -> int:
     candidates = read_candidate_csv(args.candidates_csv)
+    if args.start > 0:
+        candidates = candidates[args.start :]
     if args.max_clips is not None:
         candidates = candidates[: args.max_clips]
     report = download_candidates(
@@ -105,6 +107,7 @@ def parse_args() -> argparse.Namespace:
     audio.add_argument("--manifest", type=Path, required=True)
     audio.add_argument("--failures", type=Path, required=True)
     audio.add_argument("--sample-rate", type=int, default=32_000)
+    audio.add_argument("--start", type=int, default=0, help="Start offset in candidate CSV for shard downloads.")
     audio.add_argument("--max-clips", type=int, default=None)
     audio.add_argument("--dry-run", action="store_true")
     audio.set_defaults(func=download_audio)
@@ -124,26 +127,32 @@ def _parse_limits(values: list[str]) -> dict[str, int]:
 def download_url(url: str, output_path: Path, *, timeout_s: int = 120) -> None:
     curl = shutil.which("curl")
     if curl:
-        result = subprocess.run(
-            [
-                curl,
-                "-L",
-                "--fail",
-                "--retry",
-                "3",
-                "--retry-all-errors",
-                "--connect-timeout",
-                "20",
-                "--max-time",
-                str(timeout_s),
-                "-o",
-                str(output_path),
-                url,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout_s + 30,
-        )
+        command = [
+            curl,
+            "-L",
+            "--fail",
+            "--retry",
+            "3",
+            "--retry-all-errors",
+            "--connect-timeout",
+            "20",
+            "--max-time",
+            str(timeout_s),
+            "-C",
+            "-",
+            "-o",
+            str(output_path),
+            url,
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s + 30,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"curl timed out for {url} after {timeout_s}s") from exc
         if result.returncode == 0:
             return
         detail = (result.stderr or result.stdout or "").strip()

@@ -90,7 +90,46 @@ class PrepareAudioSetRealDataCliTests(unittest.TestCase):
         self.assertEqual(rows[0]["source_type"], "audioset")
         self.assertEqual(rows[0]["download_status"], "dry_run")
 
-    def _write_candidates(self, path: Path) -> None:
+    def test_download_audio_honors_start_offset(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            candidates = base / "candidates.csv"
+            manifest = base / "downloaded_manifest.csv"
+            failures = base / "failures.jsonl"
+            self._write_candidates(candidates, count=3)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "prepare_audioset_real_data.py"),
+                    "download-audio",
+                    "--candidates-csv",
+                    str(candidates),
+                    "--output-dir",
+                    str(base / "audio"),
+                    "--manifest",
+                    str(manifest),
+                    "--failures",
+                    str(failures),
+                    "--start",
+                    "1",
+                    "--max-clips",
+                    "1",
+                    "--dry-run",
+                ],
+                cwd=str(ROOT),
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+
+            rows = self._read_rows(manifest)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["clip_id"], "abc_001")
+
+    def _write_candidates(self, path: Path, *, count: int = 1) -> None:
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(
                 handle,
@@ -108,20 +147,21 @@ class PrepareAudioSetRealDataCliTests(unittest.TestCase):
                 ],
             )
             writer.writeheader()
-            writer.writerow(
-                {
-                    "clip_id": "abc_000001000_000011000",
-                    "ytid": "abc",
-                    "start_seconds": "1.000",
-                    "end_seconds": "11.000",
-                    "label": "cough",
-                    "audioset_labels": "Cough",
-                    "positive_mids": "/m/cough",
-                    "source_type": "audioset",
-                    "source_id": "audioset:abc:1.000:11.000",
-                    "youtube_url": "https://www.youtube.com/watch?v=abc",
-                }
-            )
+            for index in range(count):
+                writer.writerow(
+                    {
+                        "clip_id": f"abc_{index:03d}",
+                        "ytid": f"abc{index}",
+                        "start_seconds": "1.000",
+                        "end_seconds": "11.000",
+                        "label": "cough",
+                        "audioset_labels": "Cough",
+                        "positive_mids": "/m/cough",
+                        "source_type": "audioset",
+                        "source_id": f"audioset:abc{index}:1.000:11.000",
+                        "youtube_url": f"https://www.youtube.com/watch?v=abc{index}",
+                    }
+                )
 
     def _read_rows(self, path: Path) -> list[dict[str, str]]:
         with path.open("r", encoding="utf-8", newline="") as handle:
