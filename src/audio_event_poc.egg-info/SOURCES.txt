@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/audio_event_poc/__init__.py
+src/audio_event_poc/audio.py
+src/audio_event_poc/clap_backend.py
+src/audio_event_poc/config.py
+src/audio_event_poc/decision.py
+src/audio_event_poc/recording.py
+src/audio_event_poc.egg-info/PKG-INFO
+src/audio_event_poc.egg-info/SOURCES.txt
+src/audio_event_poc.egg-info/dependency_links.txt
+src/audio_event_poc.egg-info/top_level.txt
+tests/test_config.py
+tests/test_decision.py

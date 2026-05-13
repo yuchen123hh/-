@@ -1,0 +1,42 @@
+model:
+  name: efficientat_dymn10_as
+  version: v0
+  sample_rate: 16000
+  window_s: 2.0
+  hop_s: 0.5
+  source: unitree_g1_mic
+
+thresholds:
+  distress_call: 0.62
+  glass_break: 0.68
+  knock: 0.58
+  cough: 0.62
+  smoke_alarm: 0.64
+
+consecutive_hits:
+  distress_call: 2
+  glass_break: 1
+  knock: 2
+  cough: 2
+  smoke_alarm: 2
+
+runtime:
+  cooldown_s: 8.0
+  webhook_url: ""
+  webhook_timeout_s: 3.0
+  webhook_max_retries: 2
+  webhook_retry_delay_s: 0.5
+
+training_budget:
+  gpu: RTX 4090 24GB
+  round_1_rmb: 50
+  round_2_rmb: 50
+  note: "Do not start cloud GPU training until the user approves compute payment."
+
+classes:
+  - distress_call
+  - glass_break
+  - knock
+  - cough
+  - smoke_alarm
+  - background

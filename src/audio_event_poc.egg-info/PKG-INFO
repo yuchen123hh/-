@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: audio-event-poc
+Version: 0.1.0
+Summary: Quiet-office CLAP audio event detection PoC for knock, cough, and clap.
+Requires-Python: <3.13,>=3.10

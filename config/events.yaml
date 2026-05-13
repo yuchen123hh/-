@@ -1,0 +1,65 @@
+{
+  "events": [
+    {
+      "key": "knock",
+      "label": "敲门",
+      "category": "interaction",
+      "threshold": 0.30,
+      "prompts": [
+        "a person knocking on a door",
+        "knocking at the door",
+        "someone knocks on a wooden door",
+        "repeated knocking sounds",
+        "knocking on wood"
+      ]
+    },
+    {
+      "key": "cough",
+      "label": "咳嗽",
+      "category": "human",
+      "threshold": 0.30,
+      "prompts": [
+        "a person coughing",
+        "someone coughs in a quiet room",
+        "a short human cough"
+      ]
+    },
+    {
+      "key": "clap",
+      "label": "拍手",
+      "category": "interaction",
+      "threshold": 0.30,
+      "prompts": [
+        "a person clapping hands",
+        "hand clapping sound",
+        "a single clap in a quiet room",
+        "one loud hand clap",
+        "two hand claps"
+      ]
+    },
+    {
+      "key": "silence",
+      "label": "安静办公室",
+      "category": "suppress",
+      "threshold": 0.0,
+      "prompts": [
+        "a quiet office",
+        "silence in an office room",
+        "background room noise with no event"
+      ],
+      "suppress": true
+    },
+    {
+      "key": "other",
+      "label": "其他声音",
+      "category": "suppress",
+      "threshold": 0.0,
+      "prompts": [
+        "people talking in the background",
+        "keyboard typing in an office",
+        "unknown office noise"
+      ],
+      "suppress": true
+    }
+  ]
+}
