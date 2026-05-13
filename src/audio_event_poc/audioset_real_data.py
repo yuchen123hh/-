@@ -61,6 +61,7 @@ def read_segment_candidates(segment_path: Path, mid_to_label: dict[str, str]) ->
     with segment_path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(_segment_csv_lines(handle))
         for row in reader:
+            row = {_normalize_column(key): value for key, value in row.items()}
             ytid = (row.get("YTID") or "").strip()
             if not ytid:
                 continue
@@ -190,7 +191,7 @@ def download_candidates(
         output_path = output_dir / candidate.label / f"{candidate.clip_id}.wav"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if dry_run:
-            successes.append(_manifest_row(candidate, output_path, "dry_run"))
+            successes.append(_manifest_row(candidate, output_path, manifest_path=manifest_path, status="dry_run"))
             continue
         assert ffmpeg is not None
         try:
@@ -204,7 +205,7 @@ def download_candidates(
                 ffmpeg_path=ffmpeg,
                 runner=command_runner,
             )
-            successes.append(_manifest_row(candidate, output_path, "downloaded"))
+            successes.append(_manifest_row(candidate, output_path, manifest_path=manifest_path, status="downloaded"))
         except RuntimeError as exc:
             failures.append({**candidate_to_row(candidate), "error": str(exc)})
 
@@ -311,15 +312,28 @@ def _split_pipe(value: str) -> list[str]:
     return [item.strip() for item in value.split("|") if item.strip()]
 
 
-def _manifest_row(candidate: AudioSetCandidate, output_path: Path, status: str) -> dict[str, str]:
+def _normalize_column(value: str | None) -> str:
+    return (value or "").strip()
+
+
+def _manifest_row(candidate: AudioSetCandidate, output_path: Path, *, manifest_path: Path, status: str) -> dict[str, str]:
     row = candidate_to_row(candidate)
     row.update(
         {
-            "audio_path": str(output_path),
+            "audio_path": _portable_relative_path(output_path, manifest_path.parent),
             "download_status": status,
         }
     )
     return row
+
+
+def _portable_relative_path(path: Path, root: Path) -> str:
+    try:
+        resolved = path.resolve()
+        resolved_root = root.resolve()
+        return resolved.relative_to(resolved_root).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _write_download_manifest(rows: list[dict[str, str]], manifest_path: Path) -> None:

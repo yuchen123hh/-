@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -23,6 +25,7 @@ from audio_event_poc.audioset_real_data import (
 def download_metadata(args: argparse.Namespace) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     downloaded: dict[str, str] = {}
+    failures: dict[str, str] = {}
     for name, url in AUDIOSET_METADATA_URLS.items():
         if name == "unbalanced_train" and args.skip_unbalanced:
             continue
@@ -30,10 +33,18 @@ def download_metadata(args: argparse.Namespace) -> int:
         if output_path.exists() and not args.force:
             downloaded[name] = str(output_path)
             continue
-        urllib.request.urlretrieve(url, output_path)  # noqa: S310 - fixed public AudioSet metadata URLs.
-        downloaded[name] = str(output_path)
-    print(json.dumps(downloaded, ensure_ascii=False, indent=2))
-    return 0
+        try:
+            download_url(url, output_path, timeout_s=args.timeout_s)
+            downloaded[name] = str(output_path)
+        except RuntimeError as exc:
+            failures[name] = str(exc)
+            if output_path.exists() and output_path.stat().st_size == 0:
+                output_path.unlink()
+            if not args.keep_going:
+                break
+    report = {"downloaded": downloaded, "failures": failures}
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if not failures else 1
 
 
 def build_candidate_manifest(args: argparse.Namespace) -> int:
@@ -77,6 +88,8 @@ def parse_args() -> argparse.Namespace:
     metadata.add_argument("--output-dir", type=Path, required=True)
     metadata.add_argument("--skip-unbalanced", action="store_true", help="Skip the large unbalanced_train_segments.csv file.")
     metadata.add_argument("--force", action="store_true")
+    metadata.add_argument("--timeout-s", type=int, default=120)
+    metadata.add_argument("--keep-going", action="store_true", help="Continue downloading remaining files after a failure.")
     metadata.set_defaults(func=download_metadata)
 
     candidates = subparsers.add_parser("build-candidates", help="Build G1 candidate rows from official AudioSet segment CSVs.")
@@ -106,6 +119,39 @@ def _parse_limits(values: list[str]) -> dict[str, int]:
         label, raw_count = value.split("=", 1)
         limits[label.strip()] = int(raw_count)
     return limits
+
+
+def download_url(url: str, output_path: Path, *, timeout_s: int = 120) -> None:
+    curl = shutil.which("curl")
+    if curl:
+        result = subprocess.run(
+            [
+                curl,
+                "-L",
+                "--fail",
+                "--retry",
+                "3",
+                "--retry-all-errors",
+                "--connect-timeout",
+                "20",
+                "--max-time",
+                str(timeout_s),
+                "-o",
+                str(output_path),
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s + 30,
+        )
+        if result.returncode == 0:
+            return
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"curl failed for {url}: {detail[-1000:]}")
+    try:
+        urllib.request.urlretrieve(url, output_path)  # noqa: S310 - fixed public AudioSet metadata URLs.
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"urllib failed for {url}: {exc}") from exc
 
 
 if __name__ == "__main__":

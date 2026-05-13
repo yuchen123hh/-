@@ -42,6 +42,23 @@ class AudioSetRealDataTests(unittest.TestCase):
         self.assertEqual(candidates[0].source_id, "audioset:abc123:30.000:40.000")
         self.assertIn("Cough", candidates[0].audioset_labels)
 
+    def test_build_candidates_handles_spaced_official_headers(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            class_labels = base / "class_labels_indices.csv"
+            segments = base / "balanced_train_segments.csv"
+            class_labels.write_text("index,mid,display_name\n0,/m/01b_21,Cough\n", encoding="utf-8")
+            segments.write_text(
+                "# YTID, start_seconds, end_seconds, positive_labels\n"
+                'abc123, 30.000, 40.000, "/m/01b_21"\n',
+                encoding="utf-8",
+            )
+
+            candidates = build_candidates([segments], class_labels)
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].label, "cough")
+
     def test_candidate_csv_round_trip_preserves_real_source_fields(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "candidates.csv"
@@ -91,7 +108,7 @@ class AudioSetRealDataTests(unittest.TestCase):
         self.assertEqual(report["downloaded"], 1)
         self.assertEqual(rows[0]["source_type"], "audioset")
         self.assertEqual(rows[0]["source_id"], "audioset:abc:30.000:40.000")
-        self.assertTrue(rows[0]["audio_path"].endswith("abc_000030000_000040000.wav"))
+        self.assertEqual(rows[0]["audio_path"], "audio/cough/abc_000030000_000040000.wav")
 
     def test_resolve_youtube_audio_url_uses_yt_dlp(self):
         commands = []
