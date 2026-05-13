@@ -6,6 +6,7 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
+.tmp_tests/
 logs/
 static/audio_test_recordings/
 static/algorithm_audio_recordings/
