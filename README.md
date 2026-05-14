@@ -10,7 +10,12 @@
 G1 对接：本地实时推理 + audio_event JSON + HTTP webhook 报警
 ```
 
-当前本机阶段只准备代码、配置、测试、训练脚本和 G1 部署入口。**需要付云 GPU 算力钱时会明确通知，不会自动开始付费训练。**
+当前分成两个环境：
+
+- 开发/数据准备：本机
+- 真机运行：Unitree G1 Ubuntu
+
+需要付云 GPU 算力钱时会明确通知，不会自动开始付费训练。
 
 正式微调只允许真实世界音频进入训练清单。`train_manifest.csv` 和 `val_manifest.csv` 必须包含 `source_type`，只接受 `audioset`（真实 AudioSet 片段）和 `g1_field`（Unitree G1 麦克风真机采集）。`synthetic`、`generated`、`mock` 或缺失来源会被云端预检和训练脚本直接拒绝。fake smoke 和合成音频只用于链路测试，不会作为正式训练数据。
 
@@ -25,10 +30,39 @@ G1 对接：本地实时推理 + audio_event JSON + HTTP webhook 报警
 - `scripts/g1_realtime_audio_service.py`：G1 实时麦克风推理服务入口。
 - `training/efficientat/`：4090 云端训练和 ONNX 导出脚手架。
 
-## 本机先验验证
+## Ubuntu G1 运行前提
 
-```powershell
-$env:PYTHONPATH="D:\codex\audio_event_poc;D:\codex\audio_event_poc\src"
+机器人端默认是 Ubuntu，这才是最终运行环境。G1 只负责实时推理和报警，不负责训练。
+
+先在 G1 上安装运行时：
+
+```bash
+cd /opt/audio_event_poc
+bash scripts/install_g1_runtime_ubuntu.sh
+```
+
+列出 Ubuntu 上可用的麦克风输入设备：
+
+```bash
+source /opt/audio_event_poc/.venv-g1/bin/activate
+python scripts/g1_realtime_audio_service.py \
+  --model models/efficientat_g1_audio_v0.onnx \
+  --list-devices
+```
+
+如果需要常驻运行，把服务文件安装到 systemd：
+
+```bash
+sudo cp scripts/g1_audio.service /etc/systemd/system/g1_audio.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now g1_audio.service
+sudo systemctl status g1_audio.service
+```
+
+## 开发机验证
+
+```bash
+export PYTHONPATH="$PWD:$PWD/src"
 python scripts/g1_fake_realtime_smoke.py
 python -m unittest discover -s tests -v
 ```
@@ -39,48 +73,48 @@ fake smoke 会输出一个标准 `audio_event`，并显示 webhook 未配置时�
 
 先下载官方 AudioSet 元数据，只是 CSV，不是训练音频：
 
-```powershell
-python scripts/prepare_audioset_real_data.py download-metadata `
-  --output-dir data\audioset_metadata `
+```bash
+python scripts/prepare_audioset_real_data.py download-metadata \
+  --output-dir data/audioset_metadata \
   --skip-unbalanced
 ```
 
 从官方 segment CSV 生成 6 类候选清单：
 
-```powershell
-python scripts/prepare_audioset_real_data.py build-candidates `
-  --class-labels-csv data\audioset_metadata\class_labels_indices.csv `
-  --segments-csv data\audioset_metadata\balanced_train_segments.csv `
-  --segments-csv data\audioset_metadata\eval_segments.csv `
-  --output data\audioset_g1_candidates.csv `
-  --limit distress_call=1200 `
-  --limit glass_break=1200 `
-  --limit knock=1200 `
-  --limit cough=1200 `
-  --limit smoke_alarm=1200 `
+```bash
+python scripts/prepare_audioset_real_data.py build-candidates \
+  --class-labels-csv data/audioset_metadata/class_labels_indices.csv \
+  --segments-csv data/audioset_metadata/balanced_train_segments.csv \
+  --segments-csv data/audioset_metadata/eval_segments.csv \
+  --output data/audioset_g1_candidates.csv \
+  --limit distress_call=1200 \
+  --limit glass_break=1200 \
+  --limit knock=1200 \
+  --limit cough=1200 \
+  --limit smoke_alarm=1200 \
   --limit background=4000
 ```
 
 先 dry-run 检查输出路径和来源字段，不下载：
 
-```powershell
-python scripts/prepare_audioset_real_data.py download-audio `
-  --candidates-csv data\audioset_g1_candidates.csv `
-  --output-dir data\audioset_audio `
-  --manifest data\audioset_g1_downloaded_manifest.csv `
-  --failures data\audioset_g1_download_failures.jsonl `
-  --max-clips 20 `
+```bash
+python scripts/prepare_audioset_real_data.py download-audio \
+  --candidates-csv data/audioset_g1_candidates.csv \
+  --output-dir data/audioset_audio \
+  --manifest data/audioset_g1_downloaded_manifest.csv \
+  --failures data/audioset_g1_download_failures.jsonl \
+  --max-clips 20 \
   --dry-run
 ```
 
 确认无误后再小批量下载真实 YouTube 音频片段并裁剪成 WAV：
 
-```powershell
-python scripts/prepare_audioset_real_data.py download-audio `
-  --candidates-csv data\audioset_g1_candidates.csv `
-  --output-dir data\audioset_audio `
-  --manifest data\audioset_g1_downloaded_manifest.csv `
-  --failures data\audioset_g1_download_failures.jsonl `
+```bash
+python scripts/prepare_audioset_real_data.py download-audio \
+  --candidates-csv data/audioset_g1_candidates.csv \
+  --output-dir data/audioset_audio \
+  --manifest data/audioset_g1_downloaded_manifest.csv \
+  --failures data/audioset_g1_download_failures.jsonl \
   --max-clips 300
 ```
 
@@ -88,39 +122,39 @@ python scripts/prepare_audioset_real_data.py download-audio `
 
 再准备训练用 train/val manifest：
 
-```powershell
-python scripts/prepare_g1_dataset.py build-manifest `
-  --metadata-csv data\audioset_g1_downloaded_manifest.csv `
-  --audio-root . `
-  --output-dir data\g1_audio `
-  --val-ratio 0.15 `
-  --limit distress_call=1200 `
-  --limit glass_break=1200 `
-  --limit knock=1200 `
-  --limit cough=1200 `
-  --limit smoke_alarm=1200 `
+```bash
+python scripts/prepare_g1_dataset.py build-manifest \
+  --metadata-csv data/audioset_g1_downloaded_manifest.csv \
+  --audio-root . \
+  --output-dir data/g1_audio \
+  --val-ratio 0.15 \
+  --limit distress_call=1200 \
+  --limit glass_break=1200 \
+  --limit knock=1200 \
+  --limit cough=1200 \
+  --limit smoke_alarm=1200 \
   --limit background=4000
 ```
 
 生成 G1 真机采样计划：
 
-```powershell
-python scripts/prepare_g1_dataset.py g1-plan `
-  --output data\g1_field_collection_plan.csv `
-  --per-event 50 `
+```bash
+python scripts/prepare_g1_dataset.py g1-plan \
+  --output data/g1_field_collection_plan.csv \
+  --per-event 50 \
   --background 150
 ```
 
 付费训练前先审计真实音频文件：
 
-```powershell
-python scripts/audit_g1_dataset.py `
-  --train-manifest data\g1_audio\train_manifest.csv `
-  --val-manifest data\g1_audio\val_manifest.csv `
-  --output reports\g1_audio_dataset_audit.json `
-  --min-duration-s 0.5 `
-  --max-duration-s 15 `
-  --min-per-label 100 `
+```bash
+python scripts/audit_g1_dataset.py \
+  --train-manifest data/g1_audio/train_manifest.csv \
+  --val-manifest data/g1_audio/val_manifest.csv \
+  --output reports/g1_audio_dataset_audit.json \
+  --min-duration-s 0.5 \
+  --max-duration-s 15 \
+  --min-per-label 100 \
   --require-all-labels
 ```
 
@@ -178,14 +212,16 @@ preflight 和训练脚本还会检查 `source_type`：只有 `audioset` 和 `g1_
 
 第二轮在 G1 真机收集误报、漏报和机器人噪声样本后继续训练 v1。
 
-## G1 运行
+## G1 Ubuntu 运行
 
 把 ONNX 模型放到 G1 后运行：
 
 ```bash
+source /opt/audio_event_poc/.venv-g1/bin/activate
 python scripts/g1_realtime_audio_service.py \
   --model models/efficientat_g1_audio_v0.onnx \
   --config config/g1_abnormal_events.yaml \
+  --device 0 \
   --webhook-url http://127.0.0.1:9000/audio-event
 ```
 
@@ -217,24 +253,16 @@ python scripts/g1_realtime_audio_service.py \
 
 页面不会 mock 模型输出。OpenAI key、ffmpeg、本地模型文件或推理依赖缺失时，页面和 JSON 都会显示真实错误。
 
-## 安装
+## 开发机安装
 
-建议使用 Python 3.10 或 3.11。先安装 ffmpeg，并确认命令行能执行：
+建议使用 Python 3.10 或 3.11。Linux 开发机示例：
 
-```powershell
-ffmpeg -version
-```
-
-安装依赖：
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -r requirements.txt
 ```
-
-PyTorch/torchaudio 如果需要 CUDA，请按你的 CUDA 版本从 PyTorch 官方源安装对应版本。
 
 ## 配置
 
@@ -256,7 +284,7 @@ models/faster-whisper-small-ct2/
 
 ## 启动
 
-```powershell
+```bash
 python scripts/audio_test_page.py --host 0.0.0.0 --port 8012 --openai-model gpt-audio --realtime-model gpt-realtime-1.5 --local-model models/faster-whisper-small-ct2 --default-backend local
 ```
 
@@ -288,7 +316,7 @@ logs/audio_test_events.jsonl
 
 生成合成 knock/clap/alarm/cough WAV，并调用 B 本地强模型链路：
 
-```powershell
+```bash
 python scripts/strong_local_event_smoke.py
 ```
 
@@ -304,14 +332,14 @@ reports/strong_local_event_smoke.json
 
 仓库仍保留原来的命令行音频事件 PoC，例如：
 
-```powershell
+```bash
 python scripts/classify_audio.py --audio samples/knock/knock_001.wav
 python scripts/run_once.py --duration 2 --keep-audio samples/latest.wav
 ```
 
 核心逻辑测试：
 
-```powershell
-$env:PYTHONPATH="D:\codex\audio_event_poc;D:\codex\audio_event_poc\src"
+```bash
+export PYTHONPATH="$PWD:$PWD/src"
 python -m unittest discover -s tests -v
 ```

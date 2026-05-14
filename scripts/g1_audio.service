@@ -1,0 +1,15 @@
+[Unit]
+Description=Unitree G1 abnormal audio detection
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/audio_event_poc
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/audio_event_poc/.venv-g1/bin/python /opt/audio_event_poc/scripts/g1_realtime_audio_service.py --model /opt/audio_event_poc/models/efficientat_g1_audio_v0.onnx --config /opt/audio_event_poc/config/g1_abnormal_events.yaml --log-jsonl /opt/audio_event_poc/logs/g1_audio_events.jsonl
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

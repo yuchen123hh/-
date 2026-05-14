@@ -70,7 +70,44 @@ def iter_microphone_windows(*, sample_rate: int, window_s: float, hop_s: float, 
                 yield buffer[-window_frames:].copy()
 
 
+def list_input_devices() -> list[dict[str, object]]:
+    try:
+        import sounddevice as sd
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("sounddevice is required to list G1 microphone devices.") from exc
+
+    devices = sd.query_devices()
+    hostapis = sd.query_hostapis()
+    rows: list[dict[str, object]] = []
+    for index, device in enumerate(devices):
+        max_input_channels = int(device.get("max_input_channels", 0))
+        if max_input_channels <= 0:
+            continue
+        hostapi_index = int(device.get("hostapi", -1))
+        hostapi_name = ""
+        if 0 <= hostapi_index < len(hostapis):
+            hostapi_name = str(hostapis[hostapi_index].get("name", ""))
+        rows.append(
+            {
+                "index": index,
+                "name": str(device.get("name", "")),
+                "hostapi": hostapi_name,
+                "max_input_channels": max_input_channels,
+                "default_samplerate": float(device.get("default_samplerate", 0.0)),
+            }
+        )
+    return rows
+
+
+def print_input_devices() -> int:
+    rows = list_input_devices()
+    print(json.dumps({"input_devices": rows}, ensure_ascii=False, indent=2))
+    return 0
+
+
 def run_service(args: argparse.Namespace) -> int:
+    if args.list_devices:
+        return print_input_devices()
     config = load_runtime_config(args.config)
     model_config = config.get("model", {})
     runtime_config = config.get("runtime", {})
@@ -122,6 +159,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--webhook-url", default=None)
     parser.add_argument("--device", default=None)
     parser.add_argument("--log-jsonl", default=str(ROOT / "logs" / "g1_audio_events.jsonl"))
+    parser.add_argument("--list-devices", action="store_true", help="Print available microphone input devices and exit.")
     return parser.parse_args()
 
 
